@@ -1,0 +1,8 @@
+wordpress/
+.env
+.DS_Store
+*.log
+.env
+wordpress/
+*.zip
+.DS_Store

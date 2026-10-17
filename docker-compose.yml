@@ -1,0 +1,83 @@
+services:
+  wordpress:
+    container_name: wordpress-${PROJECT_NAME}
+    image: wordpress:latest
+    ports:
+      - "${WORDPRESS_PORT:-0}:80"
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - WORDPRESS_DB_HOST=db
+      - WORDPRESS_DB_NAME=wp_${PROJECT_NAME}
+      - WORDPRESS_DB_USER=wp_${PROJECT_NAME}
+      - WORDPRESS_DB_PASSWORD=${DB_PASSWORD:-change-me}
+      - WORDPRESS_DEBUG=true
+      - WORDPRESS_DEBUG_LOG=true
+      - WORDPRESS_DEBUG_DISPLAY=true
+      - SCRIPT_DEBUG=true
+      - PHP_MEMORY_LIMIT=2G
+      - PHP_UPLOAD_MAX_FILESIZE=1G
+      - PHP_POST_MAX_SIZE=4G
+      - PHP_MAX_EXECUTION_TIME=900
+      - PHP_MAX_INPUT_TIME=900
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./wordpress:/var/www/html
+
+  db:
+    container_name: wordpress-db-${PROJECT_NAME}
+    image: mysql:8.0
+    ports:
+      - "${MYSQL_PORT:-0}:3306"
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - MYSQL_DATABASE=wp_${PROJECT_NAME}
+      - MYSQL_USER=wp_${PROJECT_NAME}
+      - MYSQL_PASSWORD=${DB_PASSWORD:-change-me}
+      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD:-change-me}
+      - MYSQL_INNODB_BUFFER_POOL_SIZE=1G
+      - MYSQL_INNODB_LOG_FILE_SIZE=256M
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p\"$$MYSQL_ROOT_PASSWORD\" || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - backend
+    volumes:
+      - db:/var/lib/mysql
+
+  phpmyadmin:
+    container_name: wordpress-phpmyadmin-${PROJECT_NAME}
+    image: phpmyadmin:latest
+    restart: always
+    ports:
+      - "${PHPMYADMIN_PORT:-0}:80"
+    env_file:
+      - .env
+    environment:
+      - PMA_HOST=db
+      - PMA_USER=wp_${PROJECT_NAME}
+      - PMA_PASSWORD=${DB_PASSWORD:-change-me}
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+
+networks:
+  backend:
+    name: wordpress-${PROJECT_NAME}-backend
+    driver: bridge
+
+volumes:
+  db:
+    name: wordpress-db-${PROJECT_NAME}

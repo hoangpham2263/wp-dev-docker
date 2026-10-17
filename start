@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+# WordPress + WooCommerce – 1 = full auto, 2 = check version
+set -e
+cd "$(dirname "$0")"
+
+C_G="\033[0;32m"
+C_Y="\033[1;33m"
+C_B="\033[0;34m"
+C_R="\033[0m"
+
+[[ -f .env ]] || { echo "No .env. Run: cp .env.example .env and set PROJECT_NAME"; exit 1; }
+set -a
+source .env 2>/dev/null || true
+set +a
+
+run_spinner() {
+  local pid=$1
+  local spin='|/-\'
+  while kill -0 "$pid" 2>/dev/null; do
+    for ((i=0;i<4;i++)); do
+      kill -0 "$pid" 2>/dev/null || break
+      printf "\r       %s " "${spin:$i:1}"
+      sleep 0.08
+    done
+  done
+  wait "$pid" 2>/dev/null
+  local ret=$?
+  printf "\r       ${C_G}✓ done${C_R}    \n"
+  return $ret
+}
+
+show_menu() {
+  echo ""
+  echo "  WordPress + WooCommerce"
+  echo "  ─────────────────────────────────────────"
+  echo "  1) Start full – full auto (.gitignore + normalize + fresh WP + up + autologin)"
+  echo "  2) Version    – Docker, WP, MySQL, phpMyAdmin"
+  echo "  3) Start only – chỉ docker up, giữ nguyên WordPress (dùng khi tắt Docker rồi mở lại)"
+  echo "  0) Exit"
+  echo ""
+}
+
+do_start() {
+  if ! grep -q '^PROJECT_NAME=.' .env 2>/dev/null; then
+    echo ""
+    echo -e "${C_Y}PROJECT_NAME is empty in .env.${C_R}"
+    echo "  Run: cp .env.example .env   then edit PROJECT_NAME (e.g. \"My Project\")"
+    echo ""
+    return 1
+  fi
+
+  set -a
+  source .env 2>/dev/null || true
+  set +a
+
+  echo ""
+  echo -e "${C_B}╭─────────────────────────────────────────╮${C_R}"
+  echo -e "${C_B}│${C_R}  ${C_Y}▶ Building stack${C_R}                          ${C_B}│${C_R}"
+  echo -e "${C_B}╰─────────────────────────────────────────╯${C_R}"
+  echo ""
+
+  echo -e "  ${C_Y}[1/6]${C_R} Ensure .gitignore..."
+  ./scripts/ensure-gitignore.sh >/dev/null
+  echo -e "       ${C_G}✓ done${C_R}"
+  echo ""
+
+  echo -e "  ${C_Y}[2/6]${C_R} Normalize PROJECT_NAME..."
+  ./scripts/normalize-env.sh | sed 's/^/       /'
+  echo -e "       ${C_G}✓ done${C_R}"
+  echo ""
+
+  echo -e "  ${C_Y}[3/6]${C_R} Ghi port random vào .env..."
+  ./scripts/ensure-ports-env.sh | sed 's/^/       /'
+  echo -e "       ${C_G}✓ done${C_R}"
+  echo ""
+
+  echo -e "  ${C_Y}[4/6]${C_R} Remove old wordpress + init latest..."
+  rm -rf wordpress
+  ./scripts/init-wordpress.sh >/dev/null 2>&1 &
+  run_spinner $! || exit 1
+  echo ""
+
+  echo -e "  ${C_Y}[5/6]${C_R} Docker compose up..."
+  set -a
+  source .env 2>/dev/null || true
+  set +a
+  if ! docker compose up -d 2>&1; then
+    echo -e "       ${C_Y}✗ Lỗi docker compose. Chạy: docker compose up -d${C_R}"
+    return 1
+  fi
+  echo -e "       ${C_G}✓ done${C_R}"
+  echo ""
+
+  echo -e "  ${C_Y}[6/6]${C_R} Create autologin..."
+  out=$(./scripts/generate_autologin.sh 2>&1)
+  ret=$?
+  if [[ $ret -eq 0 ]]; then
+    echo -e "       ${C_G}✓ done${C_R}  $out"
+  else
+    echo -e "       ${C_Y}skip${C_R}  $out"
+  fi
+  echo ""
+
+  echo -e "${C_G}╭─────────────────────────────────────────╮${C_R}"
+  echo -e "${C_G}│${C_R}  ✓ Stack is running.                     ${C_G}│${C_R}"
+  echo -e "${C_G}│${C_R}  See ports: docker compose ps            ${C_G}│${C_R}"
+  echo -e "${C_G}╰─────────────────────────────────────────╯${C_R}"
+  echo ""
+}
+
+do_start_only() {
+  if ! grep -q '^PROJECT_NAME=.' .env 2>/dev/null; then
+    echo ""
+    echo -e "${C_Y}PROJECT_NAME is empty in .env.${C_R}"
+    echo "  Run: cp .env.example .env   then edit PROJECT_NAME"
+    echo ""
+    return 1
+  fi
+  set -a
+  source .env 2>/dev/null || true
+  set +a
+  echo ""
+  echo -e "${C_B}╭─────────────────────────────────────────╮${C_R}"
+  echo -e "${C_B}│${C_R}  ${C_Y}▶ Docker compose up (giữ nguyên WP)${C_R}       ${C_B}│${C_R}"
+  echo -e "${C_B}╰─────────────────────────────────────────╯${C_R}"
+  echo ""
+  docker compose up -d
+  echo ""
+  echo -e "${C_G}✓ Stack is running.${C_R} WordPress: http://localhost:${WORDPRESS_PORT:-8080}"
+  echo ""
+}
+
+do_version() {
+  echo ""
+  echo -e "${C_B}╭─────────────────────────────────────────╮${C_R}"
+  echo -e "${C_B}│${C_R}  ${C_Y}Versions${C_R}                                ${C_B}│${C_R}"
+  echo -e "${C_B}╰─────────────────────────────────────────╯${C_R}"
+  echo ""
+  printf "  ${C_Y}Docker:${C_R}      %s\n" "$(docker --version 2>/dev/null || echo '—')"
+  printf "  ${C_Y}Compose:${C_R}     %s\n" "$(docker compose version --short 2>/dev/null || docker-compose --version 2>/dev/null | sed 's/.*version //;s/,.*//' || echo '—')"
+  printf "  ${C_Y}WordPress:${C_R}   %s\n" "$(docker run --rm wordpress:latest grep "wp_version =" /usr/src/wordpress/wp-includes/version.php 2>/dev/null | head -1 | sed "s/.*'\(.*\)'.*/\1/" || echo '—')"
+  printf "  ${C_Y}MySQL:${C_R}       %s\n" "$(docker run --rm mysql:8.0 mysql --version 2>/dev/null | sed 's/.*Distrib //;s/,.*//' || echo '—')"
+  printf "  ${C_Y}phpMyAdmin:${C_R} %s\n" "$(docker run --rm phpmyadmin:latest grep VERSION_STRING /var/www/html/libraries/config.default.php 2>/dev/null | head -1 | sed "s/.*'\(.*\)'.*/\1/" || echo 'latest')"
+  echo ""
+}
+
+if [[ -n "$1" ]]; then
+  case "$1" in
+    1) do_start && exit 0 || exit 1 ;;
+    2) do_version; exit 0 ;;
+    3) do_start_only && exit 0 || exit 1 ;;
+    0) echo "Bye."; exit 0 ;;
+    *) echo "Bad option. Run ./start"; exit 1 ;;
+  esac
+fi
+
+while true; do
+  show_menu
+  read -r -p "Pick (0-3): " opt
+  case "$opt" in
+    1) do_start ;;
+    2) do_version ;;
+    3) do_start_only ;;
+    0) echo "Bye."; exit 0 ;;
+    *) echo "Pick 0-3." ;;
+  esac
+  echo ""
+  read -r -p "Press Enter to continue..."
+done
