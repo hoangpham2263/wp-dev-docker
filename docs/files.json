@@ -1,0 +1,54 @@
+{
+ "title": "WP Dev Docker",
+ "description": "Môi trường dev WordPress bằng Docker",
+ "repo": "hoangpham2263/wp-dev-docker",
+ "files": [
+  {
+   "path": "README.md",
+   "group": "",
+   "title": "Giới thiệu (README)"
+  },
+  {
+   "path": ".env.example",
+   "group": ""
+  },
+  {
+   "path": "docker-compose.yml",
+   "group": ""
+  },
+  {
+   "path": "start",
+   "group": ""
+  },
+  {
+   "path": "scripts/clear-wordpress.sh",
+   "group": "scripts",
+   "title": "clear-wordpress.sh"
+  },
+  {
+   "path": "scripts/ensure-gitignore.sh",
+   "group": "scripts",
+   "title": "ensure-gitignore.sh"
+  },
+  {
+   "path": "scripts/ensure-ports-env.sh",
+   "group": "scripts",
+   "title": "ensure-ports-env.sh"
+  },
+  {
+   "path": "scripts/generate_autologin.sh",
+   "group": "scripts",
+   "title": "generate_autologin.sh"
+  },
+  {
+   "path": "scripts/init-wordpress.sh",
+   "group": "scripts",
+   "title": "init-wordpress.sh"
+  },
+  {
+   "path": "scripts/normalize-env.sh",
+   "group": "scripts",
+   "title": "normalize-env.sh"
+  }
+ ]
+}
